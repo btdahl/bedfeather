@@ -1,0 +1,20 @@
+[Unit]
+Description=Bedfeather Bedrock server orchestrator
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/bedfeather
+ExecStart=/opt/bedfeather/bfrun.sh
+ExecStop=/opt/bedfeather/bfcommand.sh --command "stop"
+Restart=no
+TimeoutStartSec=0
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
