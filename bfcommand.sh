@@ -4,7 +4,7 @@
 
 # Send command to server console of all or targeted servers
 
-source /opt/bedfeather/bfconfig.sh
+source "${BASH_SOURCE[0]%/*}/bfconfig.sh"
 
 COMMAND_TEXT=""
 TARGET_SERVER=""

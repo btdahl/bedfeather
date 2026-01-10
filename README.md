@@ -265,7 +265,6 @@ By default, Bedfeather should be installed under `/opt/bedfeather`. If you want 
     (...)
     # Change BEDFEATHER_DIR before running bfconfig.sh if you want Bedfeather to live elsewhere
     # Changing this requires knowledge of what you are doing. Systemd will not work without update
-    # You will also have to change the sourcing in the other script files
     BEDFEATHER_DIR="/your/custom/path"
     CONFIG_FILE="$BEDFEATHER_DIR/config.sh"
     (...)

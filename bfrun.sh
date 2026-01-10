@@ -5,7 +5,7 @@
 # Build and run docker environment, images and containers for all or targeted servers
 # Rebuilds and restarts containers if changes detected, image missing, or --force-rebuild
 
-source /opt/bedfeather/bfconfig.sh
+source "${BASH_SOURCE[0]%/*}/bfconfig.sh"
 
 SKEL_DIR="$BASE_DIR/skel/server"
 
@@ -52,8 +52,8 @@ for server_path in "$SERVER_DIR"/*; do
 	CMD_FIFO="$server_path/command_pipe"
 	HASH_FILE="$server_path/.bedfeather_file_hashes"
 	TRACKED_FILES=()
-	CONTAINER_NAME="${DOCKER_PREFIX}${server_ip_dir//./_}"  # replace dots with underscores
-	IMAGE_NAME="$CONTAINER_NAME"  # same as container name
+	CONTAINER_NAME="${DOCKER_PREFIX}${server_ip_dir//./_}"
+	IMAGE_NAME="$CONTAINER_NAME"
 	SERVER_IP="$server_ip_dir"
 	CRITICAL_FILE_CHANGE=0
 
@@ -76,9 +76,9 @@ for server_path in "$SERVER_DIR"/*; do
 	# Copy any missing skel files and add all skel files to tracker list
 	# Make sure they have correct permissions
 	if [[ -d "$SKEL_DIR" ]]; then
-    		find "$SKEL_DIR" -type f -exec chown root:root {} +
+		find "$SKEL_DIR" -type f -exec chown root:root {} +
 		find "$SKEL_DIR" -type f -exec chmod 644 {} +
-    		chmod +x "$SKEL_DIR/run_fifopipeprocess.sh"
+		chmod +x "$SKEL_DIR/run_fifopipeprocess.sh"
 		echo "Copying missing skeleton files to $server_path, if any"
 		cp -anv "$SKEL_DIR/." "$server_path/"
 		# Add to list of files to track for changes

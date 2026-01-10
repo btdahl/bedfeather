@@ -9,7 +9,6 @@
 
 # Change BEDFEATHER_DIR before running bfconfig.sh if you want Bedfeather to live elsewhere
 # Changing this requires knowledge of what you are doing. Systemd will not work without update
-# You will also have to change the sourcing in the other script files
 BEDFEATHER_DIR="/opt/bedfeather"
 CONFIG_FILE="$BEDFEATHER_DIR/config.sh"
 
@@ -26,7 +25,7 @@ function echl() {
 			;;
 		warn)  color="\033[1;33m" ;; # bright yellow
 		info)  color="\033[1;34m" ;; # bright blue
-		*) color="\033[0m" ;;        # default
+		*) color="\033[0m" ;;
 	esac
 	echo -e "${color}${text}\033[0m"
 }
@@ -35,7 +34,7 @@ function echl() {
 function fifo_write() {
 	local fifo="$1"
 	local command="$2"
-	local timeout_sec="${3:-5}"  # default 5 seconds
+	local timeout_sec="${3:-5}" # default 5 seconds
 
 	if [[ -z "$fifo" || -z "$command" ]]; then
 		echl "ERROR (fifo_write): missing fifo or command" error
@@ -136,8 +135,8 @@ DOCKER_PREFIX="bedfeather_"
 CONFIG_FILES=("server.properties" "permissions.json" "whitelist.json" "allowlist.json")
 
 # Networking / container
-NETWORK_IF=""
 MACVLAN_NETWORK="\${DOCKER_PREFIX}macvlan"
+NETWORK_IF=""
 SUBNET=""
 GATEWAY=""
 

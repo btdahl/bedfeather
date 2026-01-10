@@ -4,7 +4,7 @@
 
 # Backup config files and world data from all or targeted servers
 
-source /opt/bedfeather/bfconfig.sh
+source "${BASH_SOURCE[0]%/*}/bfconfig.sh"
 
 TARGET_SERVER=""
 NOTE_TEXT=""

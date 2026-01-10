@@ -6,7 +6,7 @@
 # Default behavior: list orphaned containers/images
 # Use --purge to actually remove them
 
-source /opt/bedfeather/bfconfig.sh
+source "${BASH_SOURCE[0]%/*}/bfconfig.sh"
 
 PURGE_MODE=0
 if [[ "$1" == "--purge" ]]; then
