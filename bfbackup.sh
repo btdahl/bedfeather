@@ -62,16 +62,17 @@ for server_path in "$SERVER_DIR"/*; do
 
 	if [[ $is_running -eq 1 && -p "$CMD_FIFO" ]]; then
 		echo "Container is running and FIFO exists, attempting graceful shutdown."
+		echo "Notifying players."
 		fifo_write "$CMD_FIFO" "say Server is shutting down for backup in 10 seconds"
 		sleep 10
-		echo "Stopping server..."
+		echo "Stopping server."
 		fifo_write "$CMD_FIFO" "stop"
 
 		# Wait until container stops
 		MAX_ATTEMPTS=30
 		attempt=1
 		while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
-			echl "Waiting for container $CONTAINER_NAME to stop... (attempt $attempt of $MAX_ATTEMPTS)"
+			echl "Waiting for container $CONTAINER_NAME to stop. (attempt $attempt of $MAX_ATTEMPTS)"
 			sleep 1
 			((attempt++))
 			if [[ $attempt -gt $MAX_ATTEMPTS ]]; then
@@ -100,7 +101,7 @@ for server_path in "$SERVER_DIR"/*; do
 		num_to_delete=$(( num_existing_backups - PRUNE_OLD_COUNT + 1))
 
 		if (( num_to_delete > 0 )); then
-			echl "Pruning $num_to_delete old backup(s) for $server_ip_dir..."
+			echl "Pruning $num_to_delete old backup(s) for $server_ip_dir."
 			for ((i=0; i<num_to_delete; i++)); do
 				rm -rf -- "${existing_backups[i]}"
 				echl "Deleted ${existing_backups[i]}"
@@ -109,7 +110,7 @@ for server_path in "$SERVER_DIR"/*; do
 	fi
 
 	# Backup worlds
-	echo "Backing up worlds..."
+	echo "Backing up worlds."
 	mkdir -p "$BACKUP_TARGET/worlds"
 	cp -a "$WORLDS/." "$BACKUP_TARGET/worlds/"
 
@@ -129,7 +130,7 @@ for server_path in "$SERVER_DIR"/*; do
 		[[ -p "$CMD_FIFO" ]] || mkfifo "$CMD_FIFO"
 		chmod 0666 "$CMD_FIFO"
 
-		echo "Restarting server..."
+		echo "Restarting server."
 		docker start "$CONTAINER_NAME" > /dev/null
 	fi
 

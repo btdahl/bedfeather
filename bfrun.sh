@@ -33,7 +33,7 @@ done
 
 # Create macvlan network if missing
 if ! docker network ls --format '{{.Name}}' | grep -qx "$MACVLAN_NETWORK"; then
-	echo "Creating macvlan network $MACVLAN_NETWORK..."
+	echo "Creating macvlan network $MACVLAN_NETWORK."
 	docker network create -d macvlan \
 		--subnet="$SUBNET" \
 		--gateway="$GATEWAY" \
@@ -120,69 +120,71 @@ for server_path in "$SERVER_DIR"/*; do
 
 	# Determine if we need to rebuild/run
 	image_exists=$(docker images -q "$IMAGE_NAME")
-	if [[ $CRITICAL_FILE_CHANGE -eq 0 && $FORCE_REBUILD -eq 0 && -n "$image_exists" ]]; then
-		echl "No changes and image exists for $SERVER_IP; skipping rebuild and restart."
-		continue
+	rebuild_needed=0
+	if [[ $CRITICAL_FILE_CHANGE -eq 1 || $FORCE_REBUILD -eq 1 || -z "$image_exists" ]]; then
+		rebuild_needed=1
 	fi
 
 	# Stop/remove existing container and its image if needed
-	echo "Finding any running containers called $CONTAINER_NAME and stopping them."
-	if docker ps -a -q -f name="^${CONTAINER_NAME}$" | grep -q .; then
-		echo "Found container $CONTAINER_NAME, let's check if it is running."
-		if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
-			echo "Container $CONTAINER_NAME is indeed running."
-			if [[ -p "$CMD_FIFO" ]]; then
-				echo "FIFO exists, attempting graceful shutdown."
-				fifo_write "$CMD_FIFO" "say Server is shutting down for rebuild in 10 seconds"
-				sleep 10
-				fifo_write "$CMD_FIFO" "stop"
+	if [[ $rebuild_needed -eq 1 ]]; then
+		echo "Finding any running containers called $CONTAINER_NAME and stopping them."
+		if docker ps -a -q -f name="^${CONTAINER_NAME}$" | grep -q .; then
+			echo "Found container $CONTAINER_NAME, let's check if it is running."
+			if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+				echo "Container $CONTAINER_NAME is indeed running."
+				if [[ -p "$CMD_FIFO" ]]; then
+					echo "FIFO exists, attempting graceful shutdown."
+					echo "Notifying players."
+					fifo_write "$CMD_FIFO" "say Server is shutting down for rebuild in 10 seconds"
+					sleep 10
+					fifo_write "$CMD_FIFO" "stop"
 
-				# Wait until container stops
-				MAX_ATTEMPTS=30
-				attempt=1
-				while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
-					echl "Waiting for container $CONTAINER_NAME to stop... (attempt $attempt of $MAX_ATTEMPTS)"
-					sleep 1
-					((attempt++))
-					if [[ $attempt -gt $MAX_ATTEMPTS ]]; then
-						echl "WARNING: container $CONTAINER_NAME did not stop after $MAX_ATTEMPTS attempts. Forcing stop." warn
-						docker stop "$CONTAINER_NAME" > /dev/null
-						sleep 10
-						break
-					fi
-				done
+					# Wait until container stops
+					MAX_ATTEMPTS=30
+					attempt=1
+					while docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; do
+						echl "Waiting for container $CONTAINER_NAME to stop. (attempt $attempt of $MAX_ATTEMPTS)"
+						sleep 1
+						((attempt++))
+						if [[ $attempt -gt $MAX_ATTEMPTS ]]; then
+							echl "WARNING: container $CONTAINER_NAME did not stop after $MAX_ATTEMPTS attempts. Forcing stop." warn
+							docker stop "$CONTAINER_NAME" > /dev/null
+							sleep 10
+							break
+						fi
+					done
 
+				else
+					# FIFO missing, force stop
+					echl "WARNING: FIFO missing for container $CONTAINER_NAME. Forcing stop." warn
+					docker stop "$CONTAINER_NAME" > /dev/null
+					sleep 10
+				fi
 			else
-				# FIFO missing, force stop
-				echl "WARNING: FIFO missing for container $CONTAINER_NAME. Forcing stop." warn
-				docker stop "$CONTAINER_NAME" > /dev/null
-				sleep 10
+				# Container exists but not running
+				echl "$CONTAINER_NAME exists but is not running; removing."
 			fi
-		else
-			# Container exists but not running
-			echl "$CONTAINER_NAME exists but is not running; removing..."
+
+			# Remove container
+			echo "Removing container $CONTAINER_NAME."
+			docker rm "$CONTAINER_NAME" > /dev/null || { echl "Failed removing container $CONTAINER_NAME. Exiting." error ; exit 1; }
 		fi
 
-		# Remove container
-		echo "Removing container $CONTAINER_NAME."
-		docker rm "$CONTAINER_NAME" > /dev/null || { echl "Failed removing container $CONTAINER_NAME. Exiting." error ; exit 1; }
-	fi
+		# Remove old image if present since rebuild is happening
+		image_in_use=$(docker ps -a --format '{{.Image}}' | grep -x "$IMAGE_NAME")
+		if [[ -n "$image_exists" && -z "$image_in_use" ]]; then
+			echo "Removing old image $IMAGE_NAME before rebuild."
+			docker rmi "$IMAGE_NAME" > /dev/null || echl "Failed removing image $IMAGE_NAME.." warn
+		elif [[ -n "$image_exists" && -n "$image_in_use" ]]; then
+			echl "Image $IMAGE_NAME still in use by a container, skipping removal." warn
+		else
+			echo "Image $IMAGE_NAME does not exist, nothing to remove."
+		fi
 
-	# Remove old image if present since rebuild is happening
-	image_exists=$(docker images -q "$IMAGE_NAME")
-	image_in_use=$(docker ps -a --format '{{.Image}}' | grep -x "$IMAGE_NAME")
-	if [[ -n "$image_exists" && -z "$image_in_use" ]]; then
-		echo "Removing old image $IMAGE_NAME before rebuild..."
-		docker rmi "$IMAGE_NAME" > /dev/null || echl "Failed removing image $IMAGE_NAME.." warn
-	elif [[ -n "$image_exists" && -n "$image_in_use" ]]; then
-		echl "Image $IMAGE_NAME still in use by a container, skipping removal." warn
-	else
-		echo "Image $IMAGE_NAME does not exist, nothing to remove."
+		# Build image
+		echo "Building $IMAGE_NAME from $server_path"
+		docker build -t "$IMAGE_NAME" "$server_path"
 	fi
-
-	# Build image
-	echo "Building $IMAGE_NAME from $server_path"
-	docker build -t "$IMAGE_NAME" "$server_path"
 
 	# Create worlds directory
 	echo "Making sure worlds resource exists with correct permissions."
@@ -196,15 +198,27 @@ for server_path in "$SERVER_DIR"/*; do
 	[[ -p "$CMD_FIFO" ]] || mkfifo "$CMD_FIFO"
 	chmod 0666 "$CMD_FIFO"
 
-	# Run container
-	echo "Running container $CONTAINER_NAME with IP $SERVER_IP"
-	docker run -d \
-		--name "$CONTAINER_NAME" \
-		--network "$MACVLAN_NETWORK" \
-		--ip "$SERVER_IP" \
-		-v "$server_path/worlds:/bedrock/worlds" \
-		-v "$CMD_FIFO:/bedrock/command_pipe" \
-		"$IMAGE_NAME" > /dev/null
+	# Check if container exists
+	if docker ps -a --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+		if docker ps --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
+			echl "Container $CONTAINER_NAME already running."
+		else
+			echl "Starting existing stopped container $CONTAINER_NAME."
+			docker start "$CONTAINER_NAME" > /dev/null
+		fi
+
+	# Container does not exist, run a new one
+	else
+		echl "Running new container $CONTAINER_NAME with IP $SERVER_IP."
+		docker run -d \
+			--name "$CONTAINER_NAME" \
+			--network "$MACVLAN_NETWORK" \
+			--ip "$SERVER_IP" \
+			-v "$server_path/worlds:/bedrock/worlds" \
+			-v "$CMD_FIFO:/bedrock/command_pipe" \
+			"$IMAGE_NAME" > /dev/null
+	fi
+
 
 	# Update tracked files hash list
 	echo "Saving new file hash list."

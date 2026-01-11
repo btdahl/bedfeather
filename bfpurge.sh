@@ -13,7 +13,7 @@ if [[ "$1" == "--purge" ]]; then
 	PURGE_MODE=1
 fi
 
-echo "Checking for orphaned Bedrock containers/images..."
+echo "Checking for orphaned Bedrock containers/images."
 
 found_orphan=0
 
@@ -29,11 +29,11 @@ for container_name in $(docker ps -a --format '{{.Names}}' | grep "^${DOCKER_PRE
 		if [[ $PURGE_MODE -eq 0 ]]; then
 			echl "Orphaned container found: $container_name (image: $image_name)" warn
 		else
-			echl "Purging container $container_name and image $image_name..." warn
+			echl "Purging container $container_name and image $image_name." warn
 
 			# Stop container if running
 			if docker ps --format '{{.Names}}' | grep -qx "$container_name"; then
-				echo "Stopping $container_name..."
+				echo "Stopping $container_name."
 				docker stop "$container_name" > /dev/null
 			fi
 
@@ -62,7 +62,7 @@ for image_name in $(docker image ls --format '{{.Repository}}' | grep "^${DOCKER
 		if [[ $PURGE_MODE -eq 0 ]]; then
 			echl "Orphaned image found: $image_name" warn
 		else
-			echl "Purging image $image_name..." warn
+			echl "Purging image $image_name." warn
 			docker rmi "$image_name" > /dev/null
 			echo "Removed image $image_name"
 		fi
