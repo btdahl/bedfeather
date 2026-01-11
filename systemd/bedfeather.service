@@ -11,6 +11,7 @@ ExecStart=/opt/bedfeather/bfrun.sh
 ExecStop=/opt/bedfeather/bfstop.sh
 Restart=no
 TimeoutStartSec=0
+TimeoutStopSec=900
 User=root
 StandardOutput=journal
 StandardError=journal

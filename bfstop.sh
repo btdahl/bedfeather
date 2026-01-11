@@ -44,7 +44,6 @@ for server_path in "$SERVER_DIR"/*; do
 	fi
 
 	if [[ $is_running -eq 1 && -p "$CMD_FIFO" ]]; then
-		# Container is running and FIFO exists, attempt graceful shutdown
 		echo "Container is running and FIFO exists, attempting graceful shutdown."
 		echo "Notifying players."
 		fifo_write "$CMD_FIFO" "say Server is shutting down NOW."
@@ -65,7 +64,6 @@ for server_path in "$SERVER_DIR"/*; do
 		done
 
 	elif [[ $is_running -eq 1 ]]; then
-		# Container running but FIFO missing; cannot stop gracefully
 		echl "FIFO missing for $server_ip_dir; attempting forceful docker stop."
 		docker stop -t 5 "$CONTAINER_NAME" > /dev/null 2>&1
 
@@ -82,9 +80,10 @@ for server_path in "$SERVER_DIR"/*; do
 			fi
 		done
 	else
-		# Container not running
 		echl "Container not running, nothing to do."
 	fi
+
+	echo "Done processing server $server_ip_dir"
 
 done
 
