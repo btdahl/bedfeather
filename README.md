@@ -4,6 +4,14 @@ Bedfeather is an ultra-lightweight, scriptable, pure Bash script suite for runni
 
 Bedfeather is **NOT AN OFFICIAL MINECRAFT PRODUCT, NOR APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
 
+## Why Bedfeather Exists
+
+The Minecraft Bedrock server has several architectural limitations that make multi-server hosting awkward on a single host machine. Each server binds its listening port to all network interfaces on the host, not to a specific IP, and uses a fixed UDP port (19132 by default). While the port can technically be changed, many clients, networks, and hosting environments expect or require the default port. This means multiple servers cannot share the same port on a single host without assigning each one a unique IP address isolated from other Bedrock servers on the same host.
+
+In addition, the Bedrock server does not expose a stable stdin-based control channel suitable for automation, and it does not support safe live snapshots of worlds while running. Running multiple instances reliably therefore requires external isolation, explicit IP management, and controlled start/stop and backup mechanisms.
+
+Bedfeather provides tools to work around these limitations, enabling safer, scriptable management of multiple Minecraft Bedrock servers on a single host.
+
 ## Key features
 1. **Multi-IP Server Hosting via Docker**
 
@@ -36,76 +44,6 @@ Bedfeather is **NOT AN OFFICIAL MINECRAFT PRODUCT, NOR APPROVED BY OR ASSOCIATED
 ### Limitations
 
 Bedfeather requires Docker and a unique IPv4 per Bedrock server. Commands sent via FIFO pipes are one-way. Live snapshots aren’t supported by Bedrock; backups require briefly stopping or pausing servers. WLAN (Wi-Fi) may be unreliable for multiple IPs. Linux/POSIX only.
-
-## Why Bedfeather Exists
-
-The Minecraft Bedrock server has several architectural limitations that make multi-server hosting awkward on a single host machine. Each server binds its listening port to all network interfaces on the host, not to a specific IP, and uses a fixed UDP port (19132 by default). While the port can technically be changed, many clients, networks, and hosting environments expect or require the default port. This means multiple servers cannot share the same port on a single host without assigning each one a unique IP address isolated from other Bedrock servers on the same host.
-
-In addition, the Bedrock server does not expose a stable stdin-based control channel suitable for automation, and it does not support safe live snapshots of worlds while running. Running multiple instances reliably therefore requires external isolation, explicit IP management, and controlled start/stop and backup mechanisms.
-
-Bedfeather provides tools to work around these limitations, enabling safer, scriptable management of multiple Minecraft Bedrock servers on a single host.
-
-## Scripts
-
-### bfconfig.sh
-
-Common configuration and helper library used by all other scripts.
-
-Loads /opt/bedfeather/config.sh, generates it if missing, and provides shared functions for logging, FIFO command writing, IP/subnet handling, and network autodetection.
-
-### bfrun.sh
-
-Builds, runs, and rebuilds Bedrock server containers.
-
-Tracks critical files, detects changes, rebuilds images when needed, manages container lifecycle, ensures required directories and FIFOs exist, and assigns each server its configured IP.
-
-```bash
-./bfrun.sh
-./bfrun.sh --force-rebuild
-./bfrun.sh --server 192.168.1.50
-```
-
-# bfstop.sh
-
-Gracefully stops running servers.
-
-Sends stop commands to running servers and waits for them to exit before returning. Can stop all servers or a single targeted server via `--server`. Makes sure the server stops gracefully.
-
-```bash
-./bfstop.sh
-./bfstop.sh --server 192.168.1.50
-```
-
-### bfbackup.sh
-
-Performs safe, scripted backups of server data.
-
-Gracefully stops running servers, copies world data and configuration files to timestamped backup directories, optionally adds a note, and restarts servers afterward. Can prune backlog and only keep a given number of copies back in time.
-
-
-```bash
-./bfbackup.sh
-./bfbackup.sh --server 192.168.1.50
-./bfbackup.sh --note "before upgrading plugins"
-./bfbackup.sh --server 192.168.1.50 --prune-old 5
-```
-
-### bfcommand.sh
-
-Sends console commands to running servers.
-
-Writes commands into each server’s FIFO command pipe, allowing scripted administration without interactive terminals.
-
-```bash
-./bfcommand.sh --command "say Server restart in 5 minutes"
-./bfcommand.sh --server 192.168.1.50 --command "save hold"
-```
-
-### bfpurge.sh
-
-Identifies and optionally removes orphaned resources.
-
-Finds containers and images that no longer have corresponding server directories and lists or removes them to keep the system clean.
 
 ## How to get a server up and running
 
@@ -286,6 +224,68 @@ By default, Bedfeather should be installed under `/opt/bedfeather`. If you want 
 
 2. **Systemd integration:**
     If you are using the systemd service to start Bedfeather automatically, you must update the symlink in `/etc/systemd/system/bedfeather.service` to point to the new path, and also update all paths in the systemd file itself.
+
+## Scripts
+
+### bfconfig.sh
+
+Common configuration and helper library used by all other scripts.
+
+Loads /opt/bedfeather/config.sh, generates it if missing, and provides shared functions for logging, FIFO command writing, IP/subnet handling, and network autodetection.
+
+### bfrun.sh
+
+Builds, runs, and rebuilds Bedrock server containers.
+
+Tracks critical files, detects changes, rebuilds images when needed, manages container lifecycle, ensures required directories and FIFOs exist, and assigns each server its configured IP.
+
+```bash
+./bfrun.sh
+./bfrun.sh --force-rebuild
+./bfrun.sh --server 192.168.1.50
+```
+
+### bfstop.sh
+
+Gracefully stops running servers.
+
+Sends stop commands to running servers and waits for them to exit before returning. Can stop all servers or a single targeted server via `--server`. Makes sure the server stops gracefully.
+
+```bash
+./bfstop.sh
+./bfstop.sh --server 192.168.1.50
+```
+
+### bfbackup.sh
+
+Performs safe, scripted backups of server data.
+
+Gracefully stops running servers, copies world data and configuration files to timestamped backup directories, optionally adds a note, and restarts servers afterward. Can prune backlog and only keep a given number of copies back in time.
+
+
+```bash
+./bfbackup.sh
+./bfbackup.sh --server 192.168.1.50
+./bfbackup.sh --note "before upgrading plugins"
+./bfbackup.sh --server 192.168.1.50 --prune-old 5
+```
+
+### bfcommand.sh
+
+Sends console commands to running servers.
+
+Writes commands into each server’s FIFO command pipe, allowing scripted administration without interactive terminals.
+
+```bash
+./bfcommand.sh --command "say Server restart in 5 minutes"
+./bfcommand.sh --server 192.168.1.50 --command "save hold"
+```
+
+### bfpurge.sh
+
+Identifies and optionally removes orphaned resources.
+
+Finds containers and images that no longer have corresponding server directories and lists or removes them to keep the system clean.
 
 ## Limitations/requirements
 
