@@ -45,6 +45,8 @@ Bedfeather provides tools to work around these limitations, enabling safer, scri
 
 Bedfeather requires Docker and a unique IPv4 per Bedrock server. Commands sent via FIFO pipes are one-way. Live snapshots aren’t supported by Bedrock; backups require briefly stopping or pausing servers. WLAN (Wi-Fi) may be unreliable for multiple IPs. Linux/POSIX only.
 
+---
+
 ## How to get a server up and running
 
 This section describes the minimal steps required to configure Bedfeather and start one or more Bedrock servers.
@@ -225,7 +227,9 @@ By default, Bedfeather should be installed under `/opt/bedfeather`. If you want 
 2. **Systemd integration:**
     If you are using the systemd service to start Bedfeather automatically, you must update the symlink in `/etc/systemd/system/bedfeather.service` to point to the new path, and also update all paths in the systemd file itself.
 
-## Scripts
+---
+
+## Servers management (scripts)
 
 ### bfconfig.sh
 
@@ -287,6 +291,8 @@ Identifies and optionally removes orphaned resources.
 
 Finds containers and images that no longer have corresponding server directories and lists or removes them to keep the system clean.
 
+---
+
 ## Limitations/requirements
 
 Bedfeather addresses many of the challenges of running multiple Minecraft Bedrock servers, but there are some inherent limitations to be aware of:
@@ -300,38 +306,44 @@ Bedfeather addresses many of the challenges of running multiple Minecraft Bedroc
 * **POSIX / Linux only:** The FIFO-based control mechanism relies on POSIX kernel FIFOs and mounting behavior. This means Bedfeather cannot run natively on Windows, though it works on Linux and other POSIX-compliant systems
 * **IPv4 only:** Bedfeather currently requires IPv4 addresses for server directories and container assignment. (Albeit, if you are using IPv6 in Docker, you likely don’t need this explanation and are mainly here for a deeper look at the FIFO command pipe.)
 
+---
 
 ## The FIFO command pipe (technical deep dive)
 
-Bedfeather solves the challenge of scripting commands to a Bedrock server in Docker using a FIFO mounted into the container and a small wrapper script. Here’s how the full flow works:
+> A Linux FIFO (named pipe) is a special file that provides a unidirectional byte stream for inter-process communication, allowing unrelated processes to exchange data using normal file I/O without storing it on disk. It is created with `mkfifo`, exists in the filesystem, and blocks on open/read/write until the other end connects, unless opened in non-blocking mode.
+> 
+> Unlike regular files, it does not support seeking and has no persistent contents, and unlike anonymous pipes it can be opened by independent processes. Because the kernel manages FIFO data entirely in memory, transfers are extremely fast compared with disk-based I/O and use far fewer resources.
 
-1. **Host writes to the FIFO**
+Bedfeather introduces a shared FIFO approach for per-container, scriptable command execution. While originally designed for Minecraft Bedrock servers, this FIFO-based approach works for any containerized process that reads from stdin and benefits from line-atomic input.
 
-    On the host, each server has a FIFO file:
+Commands are sent or scripted with near-zero overhead. A FIFO is created on the host, mounted into the container, and a lightweight wrapper script sets up the server to read from it. After that, commands flow directly to the process, making this approach orders of magnitude faster and more efficient than `docker exec` or in-container multiplexers and significantly more robust due to the removal of extra pipes and processes.
+
+If you adapt or reuse this FIFO-based stdin approach in your own projects, we encourage you to acknowledge where it originated.
+
+## Here’s how the full flow works:
+
+1. **Host creates the FIFO**
+
+    On the host, each server/container process has a FIFO file created with:
     ```bash
-    /opt/bedfeather/servers/192.168.1.50/command_pipe
+    mkfifo /opt/bedfeather/servers/192.168.1.50/command_pipe
+    chmod 0666 /opt/bedfeather/servers/192.168.1.50/command_pipe
     ```
 
-    Commands can be written directly to the FIFO from the host shell/command line:
+    Key points:
 
-    ```bash
-    # Send a single command
-    echo "say Hello world" > /opt/bedfeather/servers/192.168.1.50/command_pipe
-
-    # Pipe multiple commands from a file
-    cat commands.txt > /opt/bedfeather/servers/192.168.1.50/command_pipe
-    ```
-
-    The kernel buffers writes to the FIFO until the container reads them, ensuring atomic delivery per line.
+    * The FIFO must be created on the host before the container starts
+    * The FIFO must be generally writable, or at least writable for the process running inside the container since the process has to open the FIFO as read/write.
 
 2. **FIFO is mounted into the container**
 
-    When the container starts, the host FIFO is mounted inside the container at:
-
+    When the container starts, the host FIFO is mounted inside the container by:
     ```bash
-    /bedrock/command_pipe
+    docker run -d \
+      (...) \
+      -v "/opt/bedfeather/servers/192.168.1.50/command_pipe:/bedrock/command_pipe" \
+      DOCKER_IMAGE_NAME > /dev/null
     ```
-
     This means the container sees the same FIFO file as the host and anything written from the host is immediately available inside the container.
 
 3. **Wrapper script reads from the FIFO**
@@ -358,13 +370,22 @@ Bedfeather solves the challenge of scripting commands to a Bedrock server in Doc
 
     Key points:
 
-    * The FIFO is opened for read/write on custom file descriptor 3 to prevent blocking.
+    * The FIFO is opened for read/write (to prevent blocking) on custom file descriptor 3.
     * The Bedrock server’s stdin is redirected from the FIFO.
-    * Every line read from the FIFO is delivered to the server exactly as console input, in order.
+    * The wrapper script passes execution to the server, server runs at PID 1, as it should
 
 4. **Server executes commands**
 
-    Commands are executed sequentially, preserving order.
+    Commands can be written directly to the FIFO from the host shell/command line:
+    ```bash
+    # Send a single command
+    echo "say Hello world" > /opt/bedfeather/servers/192.168.1.50/command_pipe
+
+    # Pipe multiple commands from a file
+    cat commands.txt > /opt/bedfeather/servers/192.168.1.50/command_pipe
+    ```
+
+    The kernel buffers writes to the FIFO until the container reads them, ensuring atomic delivery per line. Commands are executed sequentially, preserving order.
 
     Multiple writers can write safely to the FIFO, as long as each command fits within the pipe buffer, which is system-dependent, but typically 4096 bytes on Linux. The kernel guarantees that writes up to PIPE_BUF are atomic.
 
@@ -385,7 +406,7 @@ Bedfeather solves the challenge of scripting commands to a Bedrock server in Doc
 * **Avoids common Docker issues:** Unlike docker exec or PTY-based solutions, this approach prevents deadlocks, stdin problems, and partial writes.
 * **Per-container isolation:** Each container has its own FIFO, enabling strict per-container isolation while still supporting centralized orchestration.
 
-### Why the sharedFIFO approach is faster and more resource efficient
+### Why the shared FIFO approach is faster and more resource efficient
 
 * **Direct kernel I/O:** Using a FIFO avoids TCP/IP stack overhead or additional sockets, letting commands pass directly from host to container with minimal system calls.
 * **No extra processes:** Commands are written straight to the FIFO without spawning intermediary shells or multiplexers, reducing CPU usage and memory footprint.
@@ -402,17 +423,14 @@ Bedfeather solves the challenge of scripting commands to a Bedrock server in Doc
 
 This setup transforms a simple UNIX FIFO into a robust, atomic, scriptable console channel, providing predictable, low-latency, per-container command execution in a containerized environment without unnecessary overhead.
 
-* **bfbackup.sh:** mounting FIFO into container `-v "$CMD_FIFO:/bedrock/command_pipe"`, sending shutdown messages via `fifo_write()`
-* **bfcommand.sh:** sending commands to `$CMD_FIFO` for all or targeted servers
-* **bfrun.sh:** creating FIFO `mkfifo "$CMD_FIFO"`, opening it as FD 3 `exec 3<> "$CMD_FIFO"`, running server as PID 1
-* **bfconfig.sh:** `fifo_write()` implementation, including timeout and atomic line semantics
-* **skel/server/run_fifopipeprocess.sh:** FD 3 redirected to server (exec /bedrock/bedrock_server <&3)
+* **skel/server/run_fifopipeprocess.sh:** the wrapper that pipes the FIFO commands to server process' stdin
+* **bfconfig.sh:** contains `fifo_write()`
+* **bfrun.sh:** creates FIFO before (building and) running container, uses fifo_write to inform players and shutting down server before rebuild
+* **bfbackup.sh:** recreates FIFO (if missing) before running container, uses fifo_write to inform players and shutting down server before backup
+* **bfcommand.sh:** uses fifo_write to send commands to servers
+* **bfstop.sh:** uses fifo_write to inform players and shutting down server
 
-## FIFO-based command pipe (General Use)
-
-Bedfeather introduces a shared FIFO approach for per-container, scriptable command execution. While originally designed for Minecraft Bedrock servers, this FIFO-based approach works for any containerized process that reads from stdin and benefits from line-atomic input.
-
-If you adapt or reuse this FIFO-based stdin approach in your own projects, we encourage you to acknowledge where it originated.
+---
 
 ## License & Reuse
 
