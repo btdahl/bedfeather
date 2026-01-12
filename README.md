@@ -65,6 +65,17 @@ Tracks critical files, detects changes, rebuilds images when needed, manages con
 ./bfrun.sh --server 192.168.1.50
 ```
 
+# bfstop.sh
+
+Gracefully stops running servers.
+
+Sends stop commands to running servers and waits for them to exit before returning. Can stop all servers or a single targeted server via `--server`. Makes sure the server stops gracefully.
+
+```bash
+./bfstop.sh
+./bfstop.sh --server 192.168.1.50
+```
+
 ### bfbackup.sh
 
 Performs safe, scripted backups of server data.
