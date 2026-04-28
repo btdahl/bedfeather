@@ -1,8 +1,10 @@
 # Bedfeather
 
-Bedfeather is an ultra-lightweight, scriptable, pure Bash script suite for running and managing multiple Minecraft Bedrock servers on a single host. Each server runs in its own Docker container with a dedicated IPv4 address, allowing all instances to share the default Bedrock port without conflicts. Bedfeather provides scriptable backups, FIFO-based command automation, and deployment/rebuild management, enabling efficient command-line automation for multiple servers simultaneously.
+Bedfeather is an ultra-lightweight, scriptable, pure Bash script suite for command line management and orchestration of multiple Minecraft Bedrock servers on a single host. Each server runs in its own Docker container with a dedicated IPv4 address, allowing all instances to share the default Bedrock port without conflicts. Bedfeather provides scriptable backups, FIFO-based command automation, and deployment/rebuild management, enabling efficient command-line automation for multiple servers simultaneously.
 
 Bedfeather is **NOT AN OFFICIAL MINECRAFT PRODUCT, NOR APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
+
+*The FIFO-based command channel pattern used here is described in general form in [Sending stdin into a container using nothing but kernel primitives](https://blog.apario.net/sending-stdin-into-a-container), an article that distills the technique from this implementation for use in any containerized stdin-reading process.*
 
 ## Why Bedfeather Exists
 
@@ -310,6 +312,8 @@ Bedfeather addresses many of the challenges of running multiple Minecraft Bedroc
 
 ## The FIFO command pipe (technical deep dive)
 
+*This section describes the FIFO mechanism as implemented in Bedfeather. For a generalized treatment of the same technique applied to arbitrary containerized stdin-reading processes, see [this article](https://blog.apario.net/sending-stdin-into-a-container)*
+
 > A Linux FIFO (named pipe) is a special file that provides a unidirectional byte stream for inter-process communication, allowing unrelated processes to exchange data using normal file I/O without storing it on disk. It is created with `mkfifo`, exists in the filesystem, and blocks on open/read/write until the other end connects, unless opened in non-blocking mode.
 > 
 > Unlike regular files, it does not support seeking and has no persistent contents, and unlike anonymous pipes it can be opened by independent processes. Because the kernel manages FIFO data entirely in memory, transfers are extremely fast compared with disk-based I/O and use far fewer resources.
@@ -444,6 +448,7 @@ If you incorporate any of these methods or are inspired by them, a simple refere
 
 ```text
 Method inspired by Bedfeather (https://github.com/btdahl/bedfeather)
+See also: https://blog.apario.net/sending-stdin-into-a-container
 by apario (https://www.apario.net/) and Bjørn T. Dahl (https://github.com/btdahl)
 ```
 
